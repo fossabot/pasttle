@@ -5,3 +5,4 @@ bottle-sqlalchemy==0.4
 bottle-sqlite==0.1.2
 IPy==0.81
 psycopg2==2.5.1
+gunicorn
