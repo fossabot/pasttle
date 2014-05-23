@@ -5,10 +5,12 @@
 #
 
 import bottle
+from bottle import template
 from bottle.ext import sqlalchemy as sqlaplugin
 import hashlib
 import IPy
 import model
+import os
 import pasttle
 import pygments
 from pygments import formatters
@@ -19,10 +21,24 @@ import util
 
 application = bottle.app()
 
+# Load an alternate template directory if specified in pasttle.ini
+STATIC_CONTENT = None
+if util.conf.has_option(util.cfg_section, 'templates'):
+    tpl_path = util.conf.get(util.cfg_section, 'templates')
+    tpl_path = os.path.expanduser(tpl_path)
+    bottle.TEMPLATE_PATH.append(os.path.realpath(tpl_path))
+    STATIC_CONTENT = tpl_path
+
+# Load the templates shipped with the package
+tpl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'views')
+STATIC_CONTENT = STATIC_CONTENT or tpl_path
+bottle.TEMPLATE_PATH.append(tpl_path)
+
 # Install sqlalchemy plugin
 db_plugin = sqlaplugin.SQLAlchemyPlugin(
     model.engine, model.Base.metadata, create=True
 )
+
 application.install(db_plugin)
 
 
@@ -35,106 +51,29 @@ def get_url(path=False):
 
 
 @bottle.get('/')
+@bottle.view('index')
 def index():
     """
     Main index
     """
 
-    return u"""<html>
-    <head>
-        <title>%(title)s (running pasttle v%(version)s)</title>
-        <style>
-            body {
-                font-family: Courier;
-                font-size: 12px;
-            }
+    return dict(
+        url=get_url(),
+        title=util.conf.get(util.cfg_section, 'title'),
+        version=pasttle.__version__,
+    )
 
-            p {
-                margin: 20px;
-            }
 
-            a {
-                text-decoration: none;
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        <pre>
-pasttle(1)                          PASTTLE                          pasttle(1)
+@bottle.get('/<filetype:re:(css|images)>/<path:path>')
+def serve_static(filetype, path):
+    "Serve static files if not configured on the web server"
 
-<strong>NAME</strong>
-    pasttle: simple pastebin
+    return bottle.static_file(os.path.join(filetype, path), STATIC_CONTENT)
 
-<strong>EXAMPLES</strong>
 
-    To post the output of a given command:
-
-        &lt;command&gt; | curl -F "upload=&lt;-" %(url)s/post && echo
-
-    To post the contents of a file:
-
-        curl -F "upload=&lt;filename.ext" %(url)s/post && echo
-
-    To post the contents of a file and force the syntax to be python:
-
-        curl -F "upload=&lt;filename.ext" -F "syntax=python" \\
-            %(url)s/post && echo
-
-    To post the contents of a file and password protect it:
-
-        curl -F "upload=&lt;filename.ext" -F "password=humptydumpty" \\
-            %(url)s/post && echo
-
-    You don't like sending plain-text passwords:
-
-        curl -F "upload=&lt;filename.ext" \\
-            -F "password=$( echo -n 'bootcat' | sha1sum | cut -c 1-40 )" \\
-            -F "is_encrypted=yes" %(url)s/post && echo
-
-    To get the raw contents of a paste (i.e. paste #6):
-
-        curl %(url)s/raw/6
-
-    To get the raw contents of a password-protected paste (i.e. paste #7):
-
-        curl -d "password=foo" %(url)s/raw/7
-
-    Again you don't like sending plain-text passwords:
-
-        curl -d "is_encrypted=yes" \\
-            -d "password=$( echo -n 'bootcat' | sha1sum | cut -c 1-40 )" \\
-            %(url)s/raw/7
-
-<strong>HELPERS</strong>
-
-    There are a couple of helper functions in the link below for pasting and
-    getting pastes. Import it from your ~/.bash_profile and you should be able
-    to use these functions. Creating a ~/.pasttlerc helps you type less too.
-
-    <a href="https://raw.github.com/thekad/pasttle/master/pasttle.bashrc">
-        Link
-    </a>
-
-<strong>WEB FORM</strong>
-
-    You can also use this tiny web form to easily upload content.
-
-    <a href="%(url)s/post">
-        Link
-    </a>
-        </pre>
-        <p>Copyright &copy; Jorge Gallegos, 2012-2013</p>
-        <p>
-            <a href="https://github.com/thekad/pasttle">Get the source code</a>
-        </p>
-    </body>
-</html>
-    """ % {
-        'url': get_url(),
-        'title': util.conf.get(util.cfg_section, 'title'),
-        'version': pasttle.__version__,
-    }
+@bottle.get('/favicon.ico')
+def serve_icon():
+    return serve_static('images', 'icon.png')
 
 
 @bottle.get('/recent')
@@ -143,109 +82,31 @@ def recent(db):
     Shows an unordered list of most recent pasted items
     """
 
-    pastes = db.query(
-        model.Paste.id, model.Paste.filename, model.Paste.mimetype,
-        model.Paste.created, model.Paste.password
-    ).order_by(model.Paste.id.desc()).limit(20).all()
-    ul = u'<ul>%s</ul>'
-    li = []
-    for paste in pastes:
-        util.log.debug(paste)
-        li.append(
-            u'<li><a href="/%s">model.Paste #%d, %s (%s) %s</a></li>' %
-            (
-                paste.id, paste.id, paste.filename or u'',
-                paste.mimetype, paste.created, )
-            )
-    return ul % ''.join(li)
-
-
-def _edit_form(
-    legend='paste new',
-    content=None,
-    password=None,
-    syntax=None,
-):
-    util.log.debug('%s, %s, %s' % (legend, password, syntax))
-    return u"""<html>
-    <head>
-        <title>%s</title>
-        <style>
-            body {
-                font-family: Courier;
-                font-size: 12px;
-            }
-            p {
-                margin: 20px;
-            }
-            a {
-                text-decoration: none;
-                font-weight: bold;
-            }
-            fieldset {
-                padding: 1em;
-            }
-            label {
-                float: left;
-                margin-right: 0.5em;
-                padding-top: 0.2em;
-                text-align: right;
-                font-weight: bold;
-            }
-            .note {
-                font-size: x-small;
-            }
-        </style>
-    </head>
-    <body>
-        <form method="post" action="/post">
-            <fieldset>
-            <legend>%s</legend>
-                <label for="upload">Contents: </label>
-                <textarea id="upload" name="upload" rows="25"
-                cols="80">%s</textarea>
-                <br/>
-                <label for="syntax">Force syntax: </label>
-                <input id="syntax" name="syntax" value="%s" />
-                <br/>
-                <label for="password">Password protect this paste (40char max):
-                </label>
-                <input id="password" type="password" name="password"
-                    maxlength="40" value="%s" />
-                <br/>
-                <label for="is_encrypted">Is the password encrypted? </label>
-                <input type="checkbox" name="is_encrypted" %s
-                id="is_encrypted" />
-                <br/>
-                <input type="hidden" name="redirect" value="yes" />
-                <input type="submit" value="Submit" />
-            </fieldset>
-            <p class="note">
-                Keep in mind that passwords are transmitted in clear-text. The
-                password is not cyphered on the client-side because shipping a
-                SHA1 javascript library is perhaps too much, if you check the
-                "Is encrypted?" checkbox make sure your password is cyphered
-                with SHA1. Perhaps you better use the readily available
-            <a
-            href="https://raw.github.com/thekad/pasttle/master/pasttle.bashrc">
-            console helper</a>?
-            </p>
-        </form>
-    </body>
-</html>
-    """ % (
-        legend.capitalize(), legend.capitalize(),
-        content or u'', syntax or u'', password or u'',
-        u'checked="checked"' if password else u'',
+    return template(
+        'recent', dict(
+            pastes=db.query(
+                model.Paste.id, model.Paste.filename, model.Paste.mimetype,
+                model.Paste.created, model.Paste.password
+            ).order_by(
+                model.Paste.id.desc()
+            ).limit(20).all(),
+            url=get_url(),
+            title=util.conf.get(util.cfg_section, 'title'),
+            version=pasttle.__version__,
+        )
     )
 
 
 @bottle.get('/post')
+@bottle.view('post')
 def upload_file():
     """
     Frontend for simple posting via web interface
     """
-    return _edit_form()
+    return dict(
+        title=u'Paste New', content=u'', password=u'',
+        checked=u'', syntax=u'', url=get_url(),
+    )
 
 
 @bottle.post('/post')
@@ -270,26 +131,36 @@ def post(db):
     default_lexer = lexers.get_lexer_for_mimetype('text/plain')
     if upload:
         if syntax:
+            util.log.debug('Guessing lexer for explicit syntax %s' % (syntax,))
             try:
                 lexer = lexers.get_lexer_by_name(syntax)
             except lexers.ClassNotFound:
                 lexer = default_lexer
         else:
             if filename:
+                util.log.debug('Guessing lexer for filename %s' % (filename,))
                 try:
                     lexer = lexers.guess_lexer_for_filename(filename, upload)
                 except lexers.ClassNotFound:
                     lexer = lexers.guess_lexer(upload)
             else:
-                lexer = default_lexer
+                util.log.debug('Best guess of lexer based on content')
+                try:
+                    lexer = lexers.guess_lexer(upload)
+                    util.log.debug(lexer)
+                except lexers.ClassNotFound:
+                    lexer = default_lexer
         util.log.debug(lexer.mimetypes)
+        lx = None
         if lexer.mimetypes:
             mime = lexer.mimetypes[0]
         else:
+            if lexer.aliases:
+                lx = lexer.aliases[0]
             mime = u'text/plain'
         ip = bottle.request.remote_addr
         if ip:
-#           Try not to store crap in the database if it's not a valid IP
+            # Try not to store crap in the database if it's not a valid IP
             try:
                 ip = bin(IPy.IP(ip).int())
             except Exception as ex:
@@ -299,7 +170,8 @@ def post(db):
                 ip = None
         paste = model.Paste(
             content=upload, mimetype=mime, encrypt=encrypt,
-            password=password, ip=ip, filename=filename
+            password=password, ip=ip, filename=filename,
+            lexer=lx
         )
         util.log.debug(paste)
         db.add(paste)
@@ -320,42 +192,8 @@ def _get_paste(db, id):
     try:
         paste = db.query(model.Paste).filter_by(id=id).one()
     except:
-        paste = False
+        paste = None
     return paste
-
-
-def _password_protect_form():
-    """
-    Really simple password-protect form
-    """
-
-    return u"""<html>
-    <head>
-        <style>
-            body {
-                font-family: Courier;
-                font-size: 12px;
-            }
-
-            p {
-                margin: 20px;
-            }
-
-            a {
-                text-decoration: none;
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        <p>This entry is password protected, write in your password:</p>
-        <form method="post">
-            <input type="password" name="password" id="password" />
-            <input type="submit" />
-        </form>
-    </body>
-</html>
-    """
 
 
 def _pygmentize(paste, lang):
@@ -363,14 +201,21 @@ def _pygmentize(paste, lang):
     Guess (or force if lang is given) highlight on a given paste via pygments
     """
 
+    util.log.debug(paste)
     if lang:
         try:
             lexer = lexers.get_lexer_by_name(lang)
         except lexers.ClassNotFound:
             lexer = lexers.get_lexer_by_name('text')
     else:
-        lexer = lexers.get_lexer_for_mimetype(paste.mimetype)
-    a = '<small><a href="/edit/%s">edit</a></small>' % (paste.id,)
+        try:
+            util.log.debug(paste.lexer)
+            lexer = lexers.get_lexer_by_name(paste.lexer)
+            util.log.debug(lexer)
+        except lexers.ClassNotFound:
+            lexer = lexers.get_lexer_for_mimetype(paste.mimetype)
+    util.log.debug('Lexer is %s' % (lexer,))
+    a = '<small><a href="/edit/%s">edit as new paste</a></small>' % (paste.id,)
     if paste.ip:
         ip = IPy.IP(long(paste.ip, 2))
         util.log.debug('Originally pasted from %s' % (ip,))
@@ -408,7 +253,7 @@ def showpaste(db, id, lang=None):
     )
     if paste.password:
         if not password:
-            return _password_protect_form()
+            return template('password_protect')
         if hashlib.sha1(password).hexdigest() == paste.password:
             bottle.response.content_type = 'text/html'
             return _pygmentize(paste, lang)
@@ -449,7 +294,7 @@ def showraw(db, id):
     )
     if paste.password:
         if not password:
-            return _password_protect_form()
+            return template('password_protect')
         if match == paste.password:
             bottle.response.content_type = 'text/plain'
             return paste.content
@@ -483,20 +328,26 @@ def edit(db, id):
             match == paste.password,
         )
     )
-    kwargs = {
-        'password': paste.password,
-        'content': paste.content,
-        'syntax': lexers.get_lexer_for_mimetype(paste.mimetype).aliases[0],
-    }
+
+    post_args = dict(
+        title='Edit entry #%s' % (paste.id),
+        password=paste.password or u'',
+        content=paste.content,
+        checked=u'',
+        syntax=lexers.get_lexer_for_mimetype(paste.mimetype).aliases[0],
+        url=get_url(),
+    )
+
     if paste.password:
         if not password:
-            return _password_protect_form()
+            return template('password_protect')
         if match == paste.password:
-            return _edit_form('edit entry #%s' % (paste.id,), **kwargs)
+            post_args['checked'] = 'checked'
+            return template('post', post_args)
         else:
             return bottle.HTTPError(401, output='Wrong password provided')
     else:
-        return _edit_form('edit entry #%s' % (paste.id, ), **kwargs)
+        return template('post', post_args)
 
 
 def main():
