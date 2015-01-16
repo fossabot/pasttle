@@ -1,3 +1,11 @@
+.. image:: https://travis-ci.org/thekad/pasttle.svg?branch=master
+   :target: https://travis-ci.org/thekad/pasttle
+   :alt: Latest Travis CI Build
+
+.. image:: https://pypip.in/version/pasttle/badge.svg?text=version&style=flat
+   :target: https://pypi.python.org/pypi/pasttle/
+   :alt: Latest Version
+
 Overview
 ========
 
@@ -15,12 +23,18 @@ use to run one or the other.
 * Server: Runs on python and needs a database (defaults to using SQLite) to
   store all the data. You want this if you are setting your own private 
   pasttle instance
-* Client: These are just thin wrappers around curl, you can use this to post 
-  to a pasttle server
+* Client: Entirely written in bash. These are just thin wrappers around curl,
+  you can use this to post to a pasttle server
 
 
-Installing pasttle-server
-=========================
+Installing/Upgrading pasttle-server
+===================================
+
+.. note::
+
+   If you are upgrading pasttle-server, you'd do well in reading CHANGELOG.rst
+   first so you make sure the version you are upgrading has any additional
+   steps.
 
 Pasttle is part of PyPI, you can just:
 
@@ -28,7 +42,7 @@ Pasttle is part of PyPI, you can just:
 
     pip install pasttle
 
-and it should pull all the necessary components. Whether you want to install
+... and it should pull all the necessary components. Whether you want to install
 it in a virtual environment (which I recommend) or system-wide is totally up
 to you.
 
@@ -41,6 +55,10 @@ then I suggest you execute:
 
 ... and be done with it. Again, if you do this in a virtual environment or
 not is up to you.
+
+In either case, if you want to add any other database drivers on top of the
+shipped SQLite driver, you need to install it separately depending on what
+method you used to install pasttle to begin with.
 
 
 Running the server
@@ -66,7 +84,15 @@ After that:
 
 Should start the server. If you want to use a different config file, just set 
 the environment variable ``PASTTLECONF`` to the file you want to read before 
-starting the server.
+starting the server, like this:
+
+.. code:: bash
+
+   export PASTTLECONF=/etc/pasttle/mypasttle.ini
+   pasttle-server.py
+   # optionally, specify a different config section, e.g. [development]
+   export PASTTLECONF=/etc/pasttle/mypasttle.ini:development
+   pasttle-server.py
 
 
 Running the client

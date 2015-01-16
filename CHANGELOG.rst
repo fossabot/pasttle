@@ -1,6 +1,27 @@
 CHANGELOG
 =========
 
+v0.9.1
+------
+
+* Bugfix: the parent value was getting set to some weird integer
+
+
+v0.9
+----
+
+* DB Change: Added ``parent`` field to the ``paste`` table, integer field
+* There is now a rudimentary "history" function: if you edit an entry as new,
+  it will store the id of the entry it is based on, and a new link will appear
+  on the final "show paste" page so you can get a diff view. This diff view is
+  currently constrained to those entries without passwords
+* Refined the look&feel
+* Now the "show paste" page is also styled
+* Reorganized the index page so the most used links appear at the top
+* Paste pages now return some extra metadata that might be useful in the
+  future. Comes in the form of response headers in both normal and raw mode
+
+
 v0.8
 ----
 

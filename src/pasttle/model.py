@@ -5,6 +5,7 @@
 #
 
 import hashlib
+import os
 import sqlalchemy
 from sqlalchemy import func
 from sqlalchemy.ext import declarative
@@ -32,27 +33,29 @@ class Paste(Base):
         sqlalchemy.DateTime, default=func.now(), nullable=False
     )
     ip = sqlalchemy.Column(sqlalchemy.LargeBinary(16))
+    parent = sqlalchemy.Column(sqlalchemy.Integer)
 
     def __init__(
         self, content, mimetype, filename=None,
-        password=None, encrypt=True, ip=None,
-        lexer=None,
+        password=None, is_encrypted=True, ip=None,
+        lexer=None, parent=None
     ):
 
         self.content = content
         self.mimetype = mimetype
         if filename and filename.strip():
-            self.filename = filename.strip()[:128]
+            self.filename = os.path.basename(filename).strip()[:128]
         if password:
-            if encrypt:
-                self.password = hashlib.sha1(password).hexdigest()
-            else:
+            if is_encrypted:
                 self.password = password[:40]
-        self.ip = ip
+            else:
+                self.password = hashlib.sha1(password.encode()).hexdigest()
+        self.ip = ip.encode() if ip else None
         self.lexer = lexer
+        self.parent = parent
 
     def __repr__(self):
-        return u'<Paste "%s" (%s), protected=%s>' % (
+        return u'<Paste {0} ({1}), protected={2}>'.format(
             self.filename, self.lexer or self.mimetype, bool(self.password))
 
 
