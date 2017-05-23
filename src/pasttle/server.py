@@ -351,7 +351,7 @@ def deletepaste(db, id):
 
     paste = _get_paste(db, id)
     form = bottle.request.forms
-    if form.get('confirm') and form.get('confirm') == 'No':
+    if form.get('confirm') != "Yes":
         return bottle.redirect('{0}/{1}'.format(get_url(), paste.id, ))
 
     if not paste:
