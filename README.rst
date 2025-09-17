@@ -1,3 +1,5 @@
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Furbanairship%2Fpasttle.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Furbanairship%2Fpasttle?ref=badge_shield)
+
 .. image:: https://img.shields.io/travis/thekad/pasttle/master.svg
    :target: https://travis-ci.org/thekad/pasttle
    :alt: Latest Travis CI Build
@@ -114,3 +116,6 @@ Running the client just requires 2 steps:
 
 * Source pasttle.bashrc
 * Run ``pasttle -h`` or ``gettle -h`` to check usage
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Furbanairship%2Fpasttle.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Furbanairship%2Fpasttle?ref=badge_large)
